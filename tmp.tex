@@ -1,0 +1,526 @@
+\documentclass[12pt]{article}
+\usepackage[english]{babel}
+\usepackage{natbib}
+\usepackage{url}
+\usepackage[utf8x]{inputenc}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\graphicspath{{images/}}
+\usepackage{parskip}
+\usepackage{fancyhdr}
+\usepackage{hyperref}
+\usepackage{vmargin}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{minted}
+\usepackage{xcolor}
+\usepackage{appendix}
+\usepackage{subcaption}
+
+\definecolor{LightGray}{gray}{0.96}
+
+%New colors defined below
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.9}
+
+
+\title{A Developement of Cloud-based Trading System}								% Title
+\author{Yiheng Li}								% Author
+\date{\today}											% Date
+
+\makeatletter
+\let\thetitle\@title
+\let\theauthor\@author
+\let\thedate\@date
+\makeatother
+
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\theauthor}
+\lhead{\thetitle}
+\cfoot{\thepage}
+
+\begin{document}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\begin{titlepage}
+	\centering
+    \vspace*{0.5 cm}
+    \includegraphics[scale = 0.15]{UCB.png}\\[1.0 cm]	% University Logo
+    \textsc{\LARGE University of California, Berkeley}\\
+    \textsc{\Large Master of Financial Engineering}\\[2.0 cm]	% University Name
+	\textsc{\Large 293-5}\\[0.5 cm]				% Course Code
+	\textsc{\large Independent Study}\\[0.5 cm]				% Course Name
+	\rule{\linewidth}{0.2 mm} \\[0.5 cm]
+	{ \huge \bfseries \thetitle}\\
+	\rule{\linewidth}{0.2 mm} \\[2 cm]
+	
+	\begin{minipage}{0.2\textwidth}
+		\begin{center} \large
+% 			\emph{Author:}\\
+			\theauthor
+			\end{center}
+			\end{minipage}~
+			\begin{minipage}{0.4\textwidth}
+% 			\begin{flushright} \large
+% 			\emph{Student Number:} \\
+% 			XXXXXX000									% Your Student Number
+% 		\end{flushright}
+	\end{minipage}\\[1 cm]
+	
+	{\large \thedate}\\[1 cm]
+ 
+	\vfill
+	
+\end{titlepage}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\tableofcontents
+\pagebreak
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Introduction}
+
+By constructing a quantitative and algorithm-based model, traders can define step-by-step trading rules and utilize the cutting-edge statistics and machine learning knowledge to complete a specific task. Given the advantages of faster execution speed and higher accuracy, algorithmic trading becomes more and more popular nowadays, through dynamically identifying profitable opportunities and placing orders using computer programs.  A  robust and dedicated framework is required to ensure the model can perform effective and accurate. More specifically, this underlying trading system should be able to bridge different data sources, develop and test various trading strategies and automatically execute or simulate strategies in a profitable manner.
+
+In this project, we want to build such a framework that can implement and deploy existing trading strategies and models into a cloud-based infrastructure environment with various data vendors or warehouse. More specifically, we need a system that can meet the following requirements.
+
+\begin{enumerate}
+    \item The framework should utilize sophisticated technologies to help quantitative researchers to develop models and push models into a cloud-based production environment.
+    \item The framework should integrate with mainstream equity and options data by constructing various robust data pipelines.
+    \item The architecture of the development and trading environment shall be scalable such that more data sets and new trading systems can be introduced, back-tested and placed into production without needing to rebuild the environment.
+    \item Each model should be able to generate a user-friendly backtest report. Metrics such as cumulative returns, Sharpe ratios, etc. should be updated accordingly for the portfolio managers to monitor.
+    \item The implementation workflow should mainly use open-source software whenever possible. 
+\end{enumerate}
+
+For the next sections, we will evaluate a set of existing trading platforms and cloud-based software, we compare their pros and cons and then design our architectures based on several open-source technologies. Next, we will introduce each module of our designed trading system, from data pipelines, backtesting engines to a daily portfolio performance analyzer. In the end, we will summarise several features that our system can further improve. 
+
+\section{Product Research}
+
+Before we construct our trading system from scratch, we examine three popular algorithmic trading platforms in the U.S market.
+
+\begin{itemize}
+    \item \textbf{Quantopian}: Founded by John Fawcett and Jean Bredeche in 2011, Quantopian is a web-based product built through Python. \cite{quantopian} By allowing people to write investment algorithms directly through their platform, Quantopian can license selected strategies and share profits with the authors based on performances. Quantopian has also shared its backtesting engine called Zipline, which is developed in Python and allows strategy development for the equity and future. 
+    \item \textbf{QuantConnect}: QuantConnect is another well-known open source, community-driven algorithmic trading platform. \cite{quantconnect} They have released a web-based platform very similar to Quantopian but covering more asset classes such as options, currencies and even cryptos. Unlike Quantopian, their backtesting engine called Lean is developed under C\#, but also supports algorithms written by Python. Also, when it comes to the business model, it is not completely free as it will require users to cover monthly fees for the servers and live trading costs.
+    \item \textbf{Backtrader}: Unlike Quantopian and QuantConnect, Backtrader is a pure Python-based backtesting and trading platform without a web front-end and business models behind. \cite{backtrader} However, it is also the most flexible framework to integrate with different data feeds, develop home cooked indicators and trading strategies.
+\end{itemize}
+
+By developing strategies on all those platforms, we summarise the following pros and cons:
+
+\begin{table}[H]
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}llll@{}}
+\toprule
+\textbf{Category}        & \textbf{Quantopian} & \textbf{QuantConnect}            & \textbf{Backtrader} \\ \midrule
+\textbf{Language}        & Python; R           & C\#; Python; F                   & Python              \\
+\textbf{Assets}          & Equity, Futures     & Equity, Futures, Options, Crypto & Equity, Futures     \\
+\textbf{Resolutions}     & Day, Min            & Day, Hour, Min, Sec, Tick        & Custom              \\
+\textbf{Data Sources}    & Quandl              & Various integrated sources       & N/A                 \\
+\textbf{Data Handler}    & bcolz               & zip and flatfile                 & pandas              \\
+\textbf{Customizability} & Low                 & Medium                           & High                \\ \bottomrule
+\end{tabular}%
+}
+\caption{Platform Comparison}
+\label{table:platforms}
+\end{table}
+
+As shown in Table \ref{table:platforms}, while Quantopian was probably the most famous platform in 2018, it only supports limited asset classes, and its internal data handler can always bring additional efforts to develop on customized data pipelines. Also, Quantopian's open source engine, Zipline, only supports a set of basic backtesting features, which is not comparable with the other two platforms. On the other hand, QuantConnect is a newer product that comes with many more asset classes not covered by Quantopian. It is also much more robust and faster as its engine is developed under C\#, though it comes with the cost of a more complicated structure and therefore higher barrier for developers to further extend or customize the system. In the end, we believe Backtrader might best suit this project as it is the most flexible framework which will make minimal changes on any existing models at our hands.
+
+\section{Architecture Overview}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{structures.png}
+    \caption{System Architecture}
+    \label{fig:system_architecture}
+\end{figure}
+
+As shown in Fig \ref{fig:system_architecture}, we break down the trading system into three major modules (as marked as navy blocks). For any existing trading algorithms or models, we need to revise their data APIs and output signals format in order to meet the requirements predefined by our system.
+
+The trading system is developed mainly through Python, due to its flexible development experience, abundant data science ecosystem and fast prototype capability. The system will be packaged as an independent Python library empowered by Backtrader and other open source plugins. Once developed, it should work cross platforms through Linux Server, Windows, and MacOS. In terms of the production environment, the algorithms and the system should be deployed together with a system level scheduler. That is saying an entry point will be triggered at any particular time of a day to complete a full cycle of report generating process. The cycle will start with reading data through required data feeds, calculating signals through the model layer, using backtest engine to generate returns, and in the end, analyzed by the portfolio analyzer with a report as the final product to be sent out to stakeholders. 
+
+At last, it is worth noting that live trading is still missing from the current structure. This is because implementing live trading with a real account through different brokers usually involves more complicated API integrations, cybersecurity concerns, and model sanity checks. As the current trading strategies at hands are low frequency (turnover more than a day) and not matured enough to be automated without human interventions, we determine that live trading is not a feature that is demanded urgent and daily signals with according performance report should be sufficient for this project.
+
+\section{Data Module}
+
+Since this section, we will go through each most important module in our system with code examples to fully describe their functionalities. As the very first step of every algorithmic trading engine, data from various sources need to be connected and downloaded to feed the downstream models. Due to the low resolution that our strategies are built with, the system directly requests and parse data into pandas data frame objects into memory, without further compressing or caching mechanism.
+
+In the following code examples, we will use \textit{trading\_system} as the name of this developed Python library. However, the name is determined arbitrary and can be easily changed in the production environment.
+
+\subsection{Equity}
+
+Unlike Zipline, we are building a native web crawler instead of leveraging data vendors such as Quandl to gain Equity data, as we only need daily resolution and want to avoid the request limitations applied by vendors. The data will be directly downloaded from Yahoo using user or current server's IP address to retrieve the cookie.
+
+\begin{minted}[
+    frame=lines,
+    framesep=2mm,
+    baselinestretch=1.2,
+    bgcolor=LightGray,
+    fontsize=\footnotesize,
+    linenos
+]
+{python}
+from trading_system.data.equity import get_history
+
+spy = get_history('SPY', fromdate='2018-01-01', todate='2019-01-01', 
+                  freq='d', api_mode='yahoo')
+\end{minted}
+
+As shown in the example above, the \textit{get\_history} function will download the CSV format data from Yahoo and convert them into a pandas data frame as below:
+
+\begin{table}[H]
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lllllll@{}}
+\toprule
+\textbf{Date}           & \textbf{Open}           & \textbf{High}           & \textbf{Low}            & \textbf{Close}          & \textbf{Adj Close}      & \textbf{Volume}         \\ \midrule
+2018-01-02              & 267.839996              & 268.809998              & 267.399994              & 268.769989              & 263.759949              & 86655700                \\
+2018-01-03              & 268.959991              & 270.640015              & 268.959991              & 270.470001              & 265.428253              & 90070400                \\
+\multicolumn{1}{c}{...} & \multicolumn{1}{c}{...} & \multicolumn{1}{c}{...} & \multicolumn{1}{c}{...} & \multicolumn{1}{c}{...} & \multicolumn{1}{c}{...} & \multicolumn{1}{c}{...} \\ \bottomrule
+\end{tabular}
+}
+\caption{Equity Data Example}%
+
+\end{table}
+
+The following parameters are configurable when parsing Equity data from Yahoo:
+
+\begin{itemize}
+    \item \textbf{ticker}: Valid symbol such as `SPY` or `VIX` that represents stocks or ETFs.
+    \item \textbf{fromdate}: Format as `YYYY-MM-DD`, if not given, default to pull data since the last five years.
+    \item \textbf{todate}: Format as `YYYY-MM-DD`, if not given, default to pull data till today.
+    \item \textbf{freq}:  Currently only supports 'd' (daily), '1wk' (weekly) and '1mo' (monthly)
+    \item \textbf{api\_mode}: Currently only supports data from Yahoo (the default is 'yahoo')
+    \item \textbf{proxies}: Instead of using the current IP as cookie, the system allows using proxies to mask IP address and avoid potentially bans from Yahoo due to high traffics. An example of proxy could be \textit{\{'http': 'http://myproxy.com'\}}
+\end{itemize}
+
+\subsection{Options}
+
+In terms of the options related data, we evaluate multiple different vendors such as Wharton Research Data Services. However, none of them can provide with latest options data for free. In the end, we choose a data product named Option Research \& Technology Services (ORATS) \cite{orats}. Given the credentials provided by the ORATS team, the system can pull historical and real-time equity options data.
+
+\begin{minted}[
+    frame=lines,
+    framesep=2mm,
+    baselinestretch=1.2,
+    bgcolor=LightGray,
+    fontsize=\footnotesize,
+    linenos
+]
+{python}
+from trading_system.data.options import OratsData
+
+od = OratsData(token='YOUR_TOKEN_FROM_ORATS')
+df = od.get_history_data(name='strikes', ticker='SPY', fromdate='2019-01-01',
+                         todate='2019-02-01')
+\end{minted}
+
+To download the data for backtesting or research, an \textit{OratsData} object needs to be initialized with legal credentials provided by ORATS. Besides a set of common arguments such as \textit{fromdate}, \textit{todate}, and \textit{ticker}, the \textit{get\_history\_data} also allows following configurations:
+
+\begin{itemize}
+    \item \textbf{name}: As ORATS supports different categories of options data, each category is implemented separately. The supported methods inlcude "strikes", "volatility", "summaries", "cores general", "cores earn", "dividend", "earnings", "splits", "ivrank", "monies implied", "monies forecast".
+    \item \textbf{fields}: If given, only given metrics will be pulled from API, this would be useful if requried data size is large. By default, all fields are pulled.
+    \item \textbf{filters}: If given, data will be filtered from API, this would be useful if required data size is large. By default, all data is pulled. The format is as \("field_name", lower_bound_float, upper_bound_float\)
+    \item \textbf{dates}: A list of 'YYYY-MM-DD' dates. If provided, only given dates will be pulled and `fromdate`, `todate` will be ignored.
+\end{itemize}
+
+As ORATS provides more than a hundred relevant metrics through their APIs, this paper will not go through each of them's definition. In the example below, Table \ref{table:options} exhibits the strike price related data. The original JSON format has been transformed through our data pipelines and can be consumed by any other Python analytic tools such as \textit{pandas}.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}llllll@{}}
+\toprule
+\textbf{tradeDate} & \textbf{strike} & \textbf{ticker} & \textbf{callAskPrice} & \textbf{callBidPrice} & \textbf{...} \\ \midrule
+2019-01-02         & 100.0           & SPY             & 149.68                & 149.16                & ...          \\
+2019-01-02         & 105.0           & SPY             & 144.69                & 144.16                & ...          \\ \bottomrule
+\end{tabular}
+\caption{Options Data Example}
+\label{table:options}
+\end{table}
+
+\section{Backtesting Module}
+
+Once data is available, our algorithms or models could generate new signals based on the updated data. The output signals could be a binary long-short indicator or a set of weights of different asset classes. By separating the algorithms from the backtesting system, we want to let researchers focus on the model itself without frequently tweaking the backtesting infrastructure. On the other hand, the backtesting module will be designed as robust as possible to get used under different strategies.
+
+\subsection{Single-Asset Strategies}
+
+In the first section, we want to introduce a relatively simple strategy that is only designed for one asset class. The model generates binary signals to indicate whether the price of the underlying asset will go up or down in the future. 
+
+\begin{table}[H]
+\centering
+\begin{tabular}{cc}
+\hline
+\textbf{Date} & \textbf{Signals} \\ \hline
+2019-01-02    & 1                \\
+2019-01-03    & -1               \\
+2019-01-04    & 0                \\
+...           & ...              \\ \hline
+\end{tabular}
+\caption{Signal Example}
+\label{table:single_signal}
+\end{table}
+
+As shown in Table \ref{table:single_signal}, the strategy should generate daily signals 1, -1 or 0, which represents long, short or no actions. Given this calculated signals and a downloaded data feed from the data module, the system allows a backtesting process to be done through the following function:
+
+\begin{minted}[
+    frame=lines,
+    framesep=2mm,
+    baselinestretch=1.2,
+    bgcolor=LightGray,
+    fontsize=\footnotesize,
+    linenos
+]
+{python}
+from trading_system.backtest import build_single_signal_strategy
+
+build_single_signal_strategy(ticker='SPY', signal=signal)
+\end{minted}
+
+By default, this backtesting method will make 100\% long position for the underlying asset when a positive signal is received and 100\% short position vice versa. When there are no signals (0 indicators), the strategy will immediately clear the current position and hold everything as cash. There are several arguments we can customize this strategy further:
+
+\begin{itemize}
+    \item \textbf{ticker}: It defines the underlying assets. Pricing data will be automatically downloaded from the Data Module
+    \item \textbf{signal}: The signal data frame as described with Table \ref{table:single_signal}.
+    \item \textbf{is\_debug}: When the \textit{debug} mode is opened, the strategy will print out the daily actions and portfolio performance log records. In this way, developers could monitor each order's volume and execution price to ensure the strategy is backtested as expected.
+    \item \textbf{max\_no\_signal\_days}: By default, we will clear the position when 0 indicator is received. This behavior could be adjusted by changing the maximal days that we want our strategy to hold the current position. 
+    \item \textbf{coc}: This option stands for \textit{Cheating on Close}. In a real-world setup, we normally cannot guarantee that we can take the exact close price when executing a strategy. By using this option, we are going to simplify the backtesting process and assume we can always execute on the exact price as the close price for each trading bar.
+    \item \textbf{initial\_cash}: The initial cash to simulate the strategy, by default it will be 1 million dollars.
+    \item \textbf{adjclose}: By allowing this option, the backtesting module will use dividend and split events adjusted prices instead of real close prices whenever it is possible. This option is recommended if such events occur during the backtesting periods, to ensure the backtesting results are accurate.
+    \item \textbf{commission\_settings}: A list of commission settings including commission, interest, leverage,
+    that will be applied to the Backtrader engine in order. We will illustrate this in a separate section.
+\end{itemize}
+
+After running the backtesting module, a Backtrader compatible object will be generated and can be further used by our Portfolio Analyzer to generate a performance report.
+
+\subsection{Multi-Asset Strategies}
+
+For a strategy that contains more than one asset class, the backtesting module allows more granular signals such as the exact weight of each asset per day. In the example as below (Table \ref{table:weights}), we are implementing a simple strategy that invests in AAPL and AMZN by allocating different weights decided by an algorithm.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Date} & \textbf{AAPL} & \textbf{AMZN} \\ \midrule
+2010-01-04    & 0.5           & 0.5           \\
+2010-01-05    & 0.5           & 0.5           \\
+2010-01-06    & 0.2           & 0.8           \\
+...           & ...           & ...           \\ \bottomrule
+\end{tabular}
+\caption{Weights Example}
+\label{table:weights}
+\end{table}
+
+It sounds simple from the mathematical perspective, but it could be challenging when we integrate a re-balance strategy with an event-driven framework as Backtrader. The first challenge is that we cannot guarantee the resulted portfolio will have exact weights as we defined from the algorithm because asset prices usually are changing and transaction costs will make additional slippage. Moreover, the order of execution also needs our attention. If we execute long orders before short orders, we may end up with negative cash account during the process which is not acceptable in the real world.
+
+In the following function, those problems have been taken care of in the background. 
+
+\begin{minted}[
+    frame=lines,
+    framesep=2mm,
+    baselinestretch=1.2,
+    bgcolor=LightGray,
+    fontsize=\footnotesize,
+    linenos
+]
+{python}
+from trading_system.backtest import build_weights_rebalance_strategy
+
+strat = build_weights_rebalance_strategy(
+    tickers=['AAPL', 'AMZN'],
+    weights=weights,
+    datasets=[aapl, amzn],
+    lazy_rebalance=True,
+    is_debug=False,
+    commission_settings=[{'commission': 0.001}], 
+    weight_slippage=0.001
+)
+\end{minted}
+
+\begin{itemize}
+    \item \textbf{tickers}: A list of acceptable equity tickers such as 'SPY.'
+    \item \textbf{weights}: A data frame with DateTime index and each column as a series of weights per asset. The format should be similar to Table \ref{table:weights}.
+    \item \textbf{datasets}:  A list of OLHCV tables and the order should match tickers. If given,
+    will use the given datasets instead of downloading new data.
+    \item \textbf{lazy\_rebalance}:  If True, when weights are not changing from two continuous days, no trades will be made. Otherwise, the rebalance is based on changing values per asset; you should expect more frequent trades. This option allows fewer turnovers and makes monthly or quarterly rebalance possible when backtesting.
+    \item \textbf{warn\_order}: As Backtrader is simulating a real-world order management system as brokers. It is possible that we sometimes end up with order rejections due to abnormal interest rate, insufficient liquidity or changed asset prices. When setting this option true, warnings will be flagged if any orders are not executed properly.
+    \item \textbf{smart\_execute}: As described above, there are several challenges such as ensuring transaction costs will not influence the realized weights. In this project, we call those home-cooked solutions as "smart executions." However, it cannot guarantee to work under all circumstances, especially when commission rules are defined as non-linear or asset prices within a relatively larger scale compared with current cash balance.
+    \item \textbf{weight\_slippage}: If given, the weights will be adjusted when allocating assets. This is another to avoid orders get rejected. For example, 0.01 slippage means actual weights will be adjusted by 1\% less to avoid not enough cash left in the broker account. 
+\end{itemize}
+
+As a result, the realized weights will not be the same as our defined target ratios. However, our internal backtesting algorithms will attempt to make them as close as possible.
+
+\subsection{Commisions}
+
+The backtesting system allows several different commissions to simulate transaction costs, interest rates, broker margins or any other real-world constraints. 
+
+\begin{itemize}
+    \item \textbf{commission}: The commission can be defined as monetary units in absolute values or percentages. In this way, we can simulate the transaction costs every time we need to trade on certain asset classes. The default commission will be applied to the entire backtesting time horizon. In order to make the commission to change over time, users might need to customize the \textit{Commission} object in this framework.
+    \item \textbf{margin}: For \textit{futures} like instruments, the margin money might be required from the brokers.  When there are no margins, commissions will be understood as the percentage and $price \times size$ will be applied to buy or sell operations. If the margin is set, then an absolute value will be used for the commission.
+    \item \textbf{interest rate}: Unlike commissions, there are also instruments like ETF that will require management fees when holding the position. By setting an interest rate, it will be accumulated if the strategy holds a long position for certain asset classes.
+\end{itemize}
+
+Besides, users can also define maximal leverage as one of the constraints to limit the maximal long or short operation.
+
+\section{Portfolio and Risk Analysis Module}
+
+As the last module of the trading system, a portfolio analyzer will take the backtesting object built from the backtesting module and generate a list of tables and plots to report the strategy's performance over the backtesting periods. The results could be directly visualized from a standard Jupyter notebook environment or stored separately as an HTML file.
+
+\begin{minted}[
+    frame=lines,
+    framesep=2mm,
+    baselinestretch=1.2,
+    bgcolor=LightGray,
+    fontsize=\footnotesize,
+    linenos
+]
+{python}
+from trading_system.backtest.report import ReportBuilder
+
+
+benchmark1 = spy['Adj Close'].pct_change().dropna()
+benchmark1.name = 'SPY'
+
+benchmark2 = aapl['Adj Close'].pct_change().dropna()
+benchmark2.name = 'AAPL'
+
+benchmark3 = amzn['Adj Close'].pct_change().dropna()
+benchmark3.name = 'AMZN'
+
+rb = ReportBuilder(strat, [benchmark1, benchmark2, benchmark3])
+rb.build_report(chart_type='matplotlib')
+\end{minted}
+
+In the snippet above, we used the backtesting object, \textit{strat}, and a set of market performances as the benchmarks to construct a \textit{ReportBuilder} object. By using the \textit{build\_report} method, we can generate a list of evaluations based on metrics such as cumulative returns, Sharpe ratios, and volatility.  As shown in Table \ref{table:performance_table}, we can easily compare the strategy performance with several selected benchmark portfolios in terms of various performance and risk metrics. Following with Fig \ref{fig:performance_plots}, the system will generate plots such as cumulative returns, rolling volatility, rolling Sharpe ratios, rolling betas, monthly returns heatmap, drawdown analysis and particular performances over several important periods.
+
+In addition to the static images, the trading system can also generate a report in an interactive HTML format. As presented in Fig \ref{fig:html_report1} and Fig \ref{fig:html_report2}, an independent file will be saved from the system after executing the following method:
+
+\begin{minted}[
+    frame=lines,
+    framesep=2mm,
+    baselinestretch=1.2,
+    bgcolor=LightGray,
+    fontsize=\footnotesize,
+    linenos
+]
+{python}
+rb.build_report(dest='report_sample.html')
+\end{minted}
+
+\section{Cloud Infrastructure Integrations}
+
+In the end, we need to host the trading system along with each trading algorithm on a cloud-based server. Thanks to Domino Lab \cite{DominoLab}, we do not need to construct the low-level infrastructure from scratch. 
+
+In Domino, the project is defined very similar to a Github repository, which means we only need to upload all our scripts along with its environment definitions. There are several ways to install the trading system into the platform. We can open source this system and upload it to PyPI community, which is the most popular Python community to share open source packages. Then we simply need to specify the package name and versions in the "requirement" file. Alternatively, we can directly upload the entire package into Domino and import the package as local files. By doing so, we do not need to share this system publicly.
+
+There are several advantages by using Domino instead of directly hosting the system on a cloud server such as AWS:
+
+\begin{enumerate}
+    \item \textbf{Development Environment}: Domino Lab also provides with a user-friendly development environment from Python jupyter notebook to RStudtios, which means the strategy development could happen in the same environment as productions.
+    \item \textbf{UI Interface}: It is straightforward to make a scheduler under any Linux system and run our trading system every day and week. However, it will take much more time to build a front-end interface for even non-technical users to make and change the schedules simply through a browser.
+    \item \textbf{Collaborative}: Domino Lab allows works to be shared across different users and teams, which means any implementations of existing trading strategies could be monitored and modified collaboratively. 
+    \item \textbf{External APIs \& Apps}: Domino Lab also provides with a set of higher level features such as building REST API and Flask App directly through the projects hosted on Domino. This provides possibilities to scale the current trading system into the next level. By leveraging the API feature, any signals and performance metrics generated by this system can be consumed by other applications, which can be another separate trading system or strategies hosted in different places. Through building an app on top of the existing trading system, we can even customize the front-end interface to have more features for non-technical users.
+\end{enumerate}
+
+\section{Further Improvements}
+
+The current cloud-based framework serves pretty well with existing trading strategies that trade daily on equities and options. The live-trading is also not in demand as human intervention is still required at this stage. Nevertheless, we still have several criteria can get further improved.
+
+\begin{itemize}
+    \item \textbf{Speed}: The current structure is not optimized for a high-frequency trading environment, and the speed is not the priority when developing this platform. The programming language, Python, could be one of the bottlenecks that limit the speed of backtesting and signal generations.
+    \item \textbf{Data}: As the current strategies only focus on daily resolution and equity-based asset classes, the trading system is good with sources such as Yahoo to retrieve the data. However, for minute level or second level strategies, the current architecture might need further optimizations regarding the data pipelines. Also, \textit{pandas} as our main data analytic tool, is not suitable for extremely large dataset.
+    \item \textbf{Tests}: Due to the constraints of development time, the project is not fully covered by test cases. A well-designed test system is necessary to ensure the system can work under different circumstances and always generate the correct outputs from the given strategies.
+\end{itemize}
+
+\newpage
+\bibliographystyle{plain}
+\bibliography{biblist}
+ 
+\appendix
+\section{Performance Table}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}lllll@{}}
+\toprule
+Start date          & \multicolumn{4}{c}{2010-01-04}                                   \\ \midrule
+End date            & \multicolumn{4}{c}{2017-12-29}                                   \\ \midrule
+Total Months        & \multicolumn{4}{c}{95}                                           \\ \midrule
+\textbf{}           & \textbf{Strategy} & \textbf{SPY} & \textbf{AAPL} & \textbf{AMZN} \\ \midrule
+Annual return       & 25.0\%            & 13.6\%       & 30.0\%        & 31.2\%        \\
+Cumulative returns  & 494.6\%           & 177.0\%      & 714.4\%       & 773.4\%       \\
+Annual volatility   & 23.8\%            & 14.6\%       & 25.5\%        & 31.2\%        \\
+Sharpe ratio        & 1.06              & 0.95         & 1.16          & 1.03          \\
+Calmar ratio        & 0.88              & 0.73         & 0.75          & 1.02          \\
+Stability           & 0.97              & 0.96         & 0.93          & 0.96          \\
+Max drawdown        & -28.5\%           & -18.6\%      & -40.1\%       & -30.5\%       \\
+Omega ratio         & 1.20              & 1.19         & 1.23          & 1.21          \\
+Sortino ratio       & 1.56              & 1.34         & 1.73          & 1.57          \\
+Skew                & -0.01             & -0.39        & -0.05         & 0.53          \\
+Kurtosis            & 3.82              & 4.54         & 4.48          & 8.97          \\
+Tail ratio          & 1.01              & 0.98         & 1.07          & 1.05          \\
+Daily value at risk & -2.9\%            & -1.8\%       & -3.1\%        & -3.8\%        \\
+Gross leverage      & 1.00              & NaN          & NaN           & NaN           \\
+Daily turnover      & 18.3\%            & NaN          & NaN           & NaN           \\
+Alpha               & 0.11              & 0.00         & 0.16          & 0.17          \\
+Beta                & 1.04              & 1.00         & 0.96          & 1.11          \\ \bottomrule
+\end{tabular}
+\caption{Performance Table Based On Simulated Data}
+\label{table:performance_table}
+\end{table}
+
+\section{Performance Plots (Matplotlib)}
+
+\begin{figure}[H]
+     \centering
+    \begin{subfigure}[t]{0.42\textwidth}
+        \raisebox{-\height}{\includegraphics[width=\textwidth]{1.png}}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.42\textwidth}
+        \raisebox{-\height}{\includegraphics[width=\textwidth]{2.png}}
+    \end{subfigure}
+    
+    \begin{subfigure}[t]{0.42\textwidth}
+        \raisebox{-\height}{\includegraphics[width=\textwidth]{3.png}}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.42\textwidth}
+        \raisebox{-\height}{\includegraphics[width=\textwidth]{4.png}}
+    \end{subfigure}
+    
+    \begin{subfigure}[t]{0.42\textwidth}
+        \raisebox{-\height}{\includegraphics[width=\textwidth]{5.png}}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[t]{0.42\textwidth}
+        \raisebox{-\height}{\includegraphics[width=\textwidth]{6.png}}
+    \end{subfigure}
+    
+    \begin{subfigure}[t]{0.9\textwidth}
+        \raisebox{-\height}{\includegraphics[width=\textwidth]{7.png}}
+    \end{subfigure}
+    
+    \caption{Plots (Matplotlib)}
+    \label{fig:performance_plots}
+\end{figure}
+
+\section{Interactive Report}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{report_1.png}
+    \caption{HTML Report (1)}
+    \label{fig:html_report1}
+\end{figure}
+ 
+ \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{report_2.png}
+    \caption{HTML Report (2)}
+    \label{fig:html_report2}
+\end{figure}
+ 
+\end{document}
